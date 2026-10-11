@@ -41,6 +41,15 @@ jobs:
           NEXT_PUBLIC_SITE_URL: 'http://127.0.0.1:3000'
           PLAYWRIGHT_JSON_OUTPUT_NAME: 'e2e-results.json'
         run: npx playwright test --reporter=line,json --workers=2
+      - name: CMS API integration with actual isolated Redis
+        id: redis_cms
+        working-directory: site/FORNO_NORI_V6_2_1
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: |
+          command -v redis-server >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y redis-server redis-tools)
+          node ../../qa/redis-cms-integration.cjs
       - name: Lighthouse Mobile and Desktop
         id: lighthouse
         continue-on-error: true
