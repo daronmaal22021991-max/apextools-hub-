@@ -75,7 +75,8 @@ function check(name, condition) {
     check('production Next server starts',up);
     const initial=await http('/api/content');
     check('CMS reads genuine Redis through REST adapter',initial.status===200 && initial.body.persistent===true && initial.body.revision===0 && !!initial.body.data);
-    const origin=base;
+    // Next.js normalizes the loopback request origin to localhost in production mode.
+    const origin='http://localhost:'+sitePort;
     const json={'Content-Type':'application/json',Origin:origin};
     const unauth=await http('/api/content',{method:'PUT',headers:json,body:'{}'});
     check('unauthenticated publish rejected',unauth.status===401);
