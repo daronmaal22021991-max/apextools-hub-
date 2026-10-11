@@ -1,4 +1,4 @@
-name: FORNO NORI V6.2.1 Live QA
+name: FORNO NORI V6.3 Native Redis QA
 on:
   push:
     branches:
@@ -18,6 +18,9 @@ jobs:
           curl -fL --retry 3 --max-time 120 'https://32a97916-b4a6-4acc-8151-f69b018abbf2.sandbox.floot.app/_cdn/static/08227493-a5e8-4c41-b752-c1360723b42a-FORNO_NORI_V6_2_1_PRODUCTION_QA.zip' -o /tmp/forno-v621.zip
           unzip -q /tmp/forno-v621.zip -d site
           test -f site/FORNO_NORI_V6_2_1/package.json
+      - name: Apply V6.3 native Redis patch
+        working-directory: site/FORNO_NORI_V6_2_1
+        run: node ../../qa/forno-v63-apply.cjs
       - name: Install dependencies and production build
         working-directory: site/FORNO_NORI_V6_2_1
         env:
@@ -50,6 +53,12 @@ jobs:
         run: |
           command -v redis-server >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y redis-server redis-tools)
           node ../../qa/redis-cms-integration.cjs
+      - name: CMS Native Redis TCP integration
+        working-directory: site/FORNO_NORI_V6_2_1
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: node ../../qa/redis-cms-native.cjs
       - name: Lighthouse Mobile and Desktop
         id: lighthouse
         continue-on-error: true
