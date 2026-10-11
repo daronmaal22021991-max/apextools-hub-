@@ -32,7 +32,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
      });
    },spec.maxScroll);
    await sleep(650);
-   const v=await page.video.path();await page.close();await ctx.close();
+   const v=await page.video().path();await page.close();await ctx.close();
    fs.renameSync(v,path.join(OUT,spec.name+'.webm'));
    console.log('LIVE_SCROLL_RECORDED',spec.name,fs.statSync(path.join(OUT,spec.name+'.webm')).size);
   }
