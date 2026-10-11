@@ -24,7 +24,7 @@ jobs:
           NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: '1'
         run: |
-          npm install --no-audit --no-fund
+          npm install --include=dev --no-audit --no-fund
           npm run build
       - name: Install actual Playwright browser and Linux dependencies
         working-directory: site/FORNO_NORI_V6_2_1
