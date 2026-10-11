@@ -80,8 +80,10 @@ function check(name, condition) {
     const unauth=await http('/api/content',{method:'PUT',headers:json,body:'{}'});
     check('unauthenticated publish rejected',unauth.status===401);
     const invalidLogin=await http('/api/admin/login',{method:'POST',headers:json,body:JSON.stringify({password:'incorrect'})});
+    console.log('INVALID_LOGIN_DIAGNOSTIC',invalidLogin.status,JSON.stringify(invalidLogin.body).slice(0,220));
     check('invalid admin login rejected',invalidLogin.status===401);
     const login=await http('/api/admin/login',{method:'POST',headers:json,body:JSON.stringify({password})});
+    console.log('VALID_LOGIN_DIAGNOSTIC',login.status,JSON.stringify(login.body).slice(0,220));
     check('admin login gets signed cookie',login.status===200 && !!login.cookie?.includes('fn_admin='));
     const cookie=login.cookie.split(';')[0];
     const userData=initial.body.data;
