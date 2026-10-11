@@ -1,0 +1,46 @@
+name: FORNO NORI portfolio capture only
+on:
+  push:
+    branches:
+      - qa/forno-nori-v621-20261011
+    paths:
+      - '.github/workflows/forno-portfolio-capture.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download site V6.2.1 and apply V6.3 source patch
+        run: |
+          curl -fsSL --retry 3 'https://32a97916-b4a6-4acc-8151-f69b018abbf2.sandbox.floot.app/_cdn/static/08227493-a5e8-4c41-b752-c1360723b42a-FORNO_NORI_V6_2_1_PRODUCTION_QA.zip' -o /tmp/source.zip
+          unzip -q /tmp/source.zip -d site
+          cd site/FORNO_NORI_V6_2_1
+          node ../../qa/forno-v63-apply.cjs
+          npm install --include=dev --no-audit --no-fund
+          NODE_ENV=production npm run build
+          npx playwright install --with-deps chromium
+      - name: Capture real pages using Chromium x2
+        working-directory: site/FORNO_NORI_V6_2_1
+        timeout-minutes: 12
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: '1'
+          NEXT_PUBLIC_BUSINESS_VERIFIED: 'false'
+        run: |
+          (npm run start -- --hostname 127.0.0.1 --port 3000 >/tmp/forno-capture-site.log 2>&1 &)
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:3000/ >/dev/null && break || sleep 1; done
+          node ../../qa/portfolio-capture.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: forno-authentic-captures
+          path: PORTFOLIO_MEDIA_CAPTURES/
+          retention-days: 3
+          if-no-files-found: warn
