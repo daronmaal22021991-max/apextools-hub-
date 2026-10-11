@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path');
-const {chromium}=require('playwright');
+const {chromium}=require(require('node:path').resolve(process.cwd(),'node_modules/playwright'));
 const OUT=path.resolve(process.cwd(),'../../PORTFOLIO_MEDIA_CAPTURES');
 fs.mkdirSync(OUT,{recursive:true});
 const entries=[];
