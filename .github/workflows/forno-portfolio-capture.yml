@@ -44,3 +44,5 @@ jobs:
           path: PORTFOLIO_MEDIA_CAPTURES/
           retention-days: 3
           if-no-files-found: warn
+
+# Revised capture: dependency resolution fixed
