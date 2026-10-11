@@ -1,0 +1,77 @@
+name: FORNO NORI V6.2.1 Live QA
+on:
+  push:
+    branches:
+      - qa/forno-nori-v621-20261011
+  workflow_dispatch:
+jobs:
+  production-and-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch exact archived site
+        run: |
+          curl -fL --retry 3 --max-time 120 'https://32a97916-b4a6-4acc-8151-f69b018abbf2.sandbox.floot.app/_cdn/static/08227493-a5e8-4c41-b752-c1360723b42a-FORNO_NORI_V6_2_1_PRODUCTION_QA.zip' -o /tmp/forno-v621.zip
+          unzip -q /tmp/forno-v621.zip -d site
+          test -f site/FORNO_NORI_V6_2_1/package.json
+      - name: Install dependencies and production build
+        working-directory: site/FORNO_NORI_V6_2_1
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Install actual Playwright browser and Linux dependencies
+        working-directory: site/FORNO_NORI_V6_2_1
+        run: npx playwright install --with-deps chromium
+      - name: Desktop and mobile Playwright E2E
+        id: e2e
+        continue-on-error: true
+        working-directory: site/FORNO_NORI_V6_2_1
+        env:
+          QA_PRODUCTION: '1'
+          CI: '1'
+          NODE_ENV: production
+          NEXT_PUBLIC_BUSINESS_VERIFIED: 'false'
+          NEXT_PUBLIC_SITE_URL: 'http://127.0.0.1:3000'
+          PLAYWRIGHT_JSON_OUTPUT_NAME: 'e2e-results.json'
+        run: npx playwright test --reporter=line,json --workers=2
+      - name: Lighthouse Mobile and Desktop
+        id: lighthouse
+        continue-on-error: true
+        working-directory: site/FORNO_NORI_V6_2_1
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: |
+          npm install --no-save --no-audit --no-fund lighthouse
+          (npm start -- --hostname 127.0.0.1 --port 3000 > /tmp/forno-site.log 2>&1 &)
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:3000 >/dev/null && break || sleep 1; done
+          export CHROME_PATH="$(find "$HOME/.cache/ms-playwright" -type f -path '*/chrome-linux64/chrome' | head -1)"
+          echo "Chrome path available: $([ -x "$CHROME_PATH" ] && echo yes || echo no)"
+          npx lighthouse http://127.0.0.1:3000/ --quiet --only-categories=performance,accessibility,best-practices,seo --chrome-flags='--headless --no-sandbox --disable-dev-shm-usage' --output=json --output-path=lighthouse-mobile.json --max-wait-for-load=40000 || true
+          npx lighthouse http://127.0.0.1:3000/ --quiet --preset=desktop --only-categories=performance,accessibility,best-practices,seo --chrome-flags='--headless --no-sandbox --disable-dev-shm-usage' --output=json --output-path=lighthouse-desktop.json --max-wait-for-load=40000 || true
+          node -e "for(const form of ['mobile','desktop']){try{const d=require('./lighthouse-'+form+'.json');console.log('LIGHTHOUSE '+form.toUpperCase()+' '+JSON.stringify(Object.fromEntries(Object.entries(d.categories).map(([k,v])=>[k,Math.round(v.score*100)]))))}catch(e){console.log('LIGHTHOUSE '+form.toUpperCase()+' FAILED '+e.message)}}"
+      - name: Upload Playwright and Lighthouse artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forno-v621-real-qa
+          path: |
+            site/FORNO_NORI_V6_2_1/e2e-results.json
+            site/FORNO_NORI_V6_2_1/test-results
+            site/FORNO_NORI_V6_2_1/lighthouse-mobile.json
+            site/FORNO_NORI_V6_2_1/lighthouse-desktop.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Summary
+        if: always()
+        run: |
+          echo "Production build completed; see steps for browser/Lighthouse results." >> "$GITHUB_STEP_SUMMARY"
+          echo "Playwright status: ${{ steps.e2e.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Lighthouse status: ${{ steps.lighthouse.outcome }}" >> "$GITHUB_STEP_SUMMARY"
