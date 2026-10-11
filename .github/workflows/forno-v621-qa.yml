@@ -1,0 +1,78 @@
+name: FORNO NORI V6.2.1 Independent Real QA
+on:
+  push:
+    branches:
+      - forno-v621-qa-20261011
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-browser-lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      QA_PRODUCTION: '1'
+      ADMIN_PASSWORD: 'forno-ci-test-only-long-password-20261011'
+      ADMIN_SESSION_SECRET: 'forno-ci-test-only-random-looking-session-secret-20261011-123'
+      NEXT_PUBLIC_SITE_URL: 'http://127.0.0.1:3000'
+      NEXT_PUBLIC_BUSINESS_VERIFIED: 'false'
+      NEXT_TELEMETRY_DISABLED: '1'
+      SITE_URL: 'https://forno-nori-v621-qa-20261011.onrender.com'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch exact FORNO NORI V6.2.1 archive
+        run: |
+          curl --fail --location --retry 3 --retry-delay 3 --max-time 120 'https://32a97916-b4a6-4acc-8151-f69b018abbf2.sandbox.floot.app/_cdn/static/08227493-a5e8-4c41-b752-c1360723b42a-FORNO_NORI_V6_2_1_PRODUCTION_QA.zip' -o /tmp/forno-qa.zip
+          unzip -q /tmp/forno-qa.zip -d /tmp/forno-qa
+          test -f /tmp/forno-qa/FORNO_NORI_V6_2_1/package.json
+      - name: Install dependencies
+        working-directory: /tmp/forno-qa/FORNO_NORI_V6_2_1
+        run: npm install --no-audit --no-fund
+      - name: Production build
+        working-directory: /tmp/forno-qa/FORNO_NORI_V6_2_1
+        env:
+          NODE_ENV: production
+        run: npm run build
+      - name: Install Chromium and OS libraries
+        working-directory: /tmp/forno-qa/FORNO_NORI_V6_2_1
+        run: npx playwright install --with-deps chromium
+      - name: Playwright production desktop and mobile test suite
+        continue-on-error: true
+        working-directory: /tmp/forno-qa/FORNO_NORI_V6_2_1
+        env:
+          NODE_ENV: production
+        run: npx playwright test --workers=2 --reporter=line,json > /tmp/playwright-console.log 2>&1 || { cat /tmp/playwright-console.log; exit 1; }
+      - name: Lighthouse CLI install
+        run: npm install -g lighthouse@13.5.0
+      - name: Warm public production QA site
+        run: |
+          for i in $(seq 1 5); do curl --retry 3 --max-time 30 -fsSL "$SITE_URL/" >/dev/null && break || sleep 4; done
+      - name: Lighthouse Mobile full run
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/forno-lighthouse
+          lighthouse "$SITE_URL/" --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" --only-categories=performance,accessibility,best-practices,seo --output=json --output-path=/tmp/forno-lighthouse/mobile.json --quiet
+          node -e "const d=require('/tmp/forno-lighthouse/mobile.json'); console.log('MOBILE_LIGHTHOUSE_SCORES', JSON.stringify(Object.fromEntries(Object.entries(d.categories).map(([k,v])=>[k,Math.round(100*v.score)]))));"
+      - name: Lighthouse Desktop full run
+        continue-on-error: true
+        run: |
+          lighthouse "$SITE_URL/" --preset=desktop --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" --only-categories=performance,accessibility,best-practices,seo --output=json --output-path=/tmp/forno-lighthouse/desktop.json --quiet
+          node -e "const d=require('/tmp/forno-lighthouse/desktop.json'); console.log('DESKTOP_LIGHTHOUSE_SCORES', JSON.stringify(Object.fromEntries(Object.entries(d.categories).map(([k,v])=>[k,Math.round(100*v.score)]))));"
+      - name: Upload actual QA evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: forno-v621-real-playwright-lighthouse
+          path: |
+            /tmp/playwright-console.log
+            /tmp/forno-qa/FORNO_NORI_V6_2_1/playwright-report/
+            /tmp/forno-qa/FORNO_NORI_V6_2_1/test-results/
+            /tmp/forno-lighthouse/
+          if-no-files-found: ignore
+          retention-days: 7
